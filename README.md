@@ -7,6 +7,10 @@ Agentic-style assistant for city distribution grid scenarios with:
 - Scenario mode (simulation / hosting_capacity) for actual what-if questions.
 - **New:** Upload your own grid model (JSON or CSV) and the demo will use it.
 
+
+![Grid-Gent UI](app/web/Grid-Gent-1.png)
+
+
 ## Running
 
 ```bash
