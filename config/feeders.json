@@ -1,0 +1,25 @@
+{
+  "feeders": {
+    "F1": {
+      "name": "Feeder F1 - Downtown Core",
+      "base_kv": 13.8,
+      "num_customers": 4200,
+      "peak_mw": 18.5,
+      "pv_mw": 3.2
+    },
+    "F2": {
+      "name": "Feeder F2 - Residential West",
+      "base_kv": 13.8,
+      "num_customers": 5100,
+      "peak_mw": 14.3,
+      "pv_mw": 4.7
+    },
+    "F3": {
+      "name": "Feeder F3 - Industrial Park",
+      "base_kv": 13.8,
+      "num_customers": 830,
+      "peak_mw": 22.1,
+      "pv_mw": 0.8
+    }
+  }
+}
