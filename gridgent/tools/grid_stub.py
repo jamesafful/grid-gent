@@ -21,22 +21,22 @@ def _load_feeder_config() -> Dict[str, Any]:
                 "base_kv": 13.8,
                 "num_customers": 4200,
                 "peak_mw": 18.5,
-                "pv_mw": 3.2
+                "pv_mw": 3.2,
             },
             "F2": {
                 "name": "Feeder F2 - Residential West",
                 "base_kv": 13.8,
                 "num_customers": 5100,
                 "peak_mw": 14.3,
-                "pv_mw": 4.7
+                "pv_mw": 4.7,
             },
             "F3": {
                 "name": "Feeder F3 - Industrial Park",
                 "base_kv": 13.8,
                 "num_customers": 830,
                 "peak_mw": 22.1,
-                "pv_mw": 0.8
-            }
+                "pv_mw": 0.8,
+            },
         }
     }
 
@@ -58,14 +58,14 @@ def _load_feeder_config() -> Dict[str, Any]:
 
 
 def get_feeder_summary(feeder: str) -> Dict[str, Any]:
-    feeder_key = feeder.upper().strip()
+    feeder_key = (feeder or "").upper().strip()
     cfg = _load_feeder_config()
     feeders = cfg.get("feeders", {})
-    if feeder_key in feeders:
+    if feeder_key and feeder_key in feeders:
         return feeders[feeder_key]
 
     return {
-        "name": f"Feeder {feeder_key} (demo placeholder)",
+        "name": f"Feeder {feeder_key or 'F?'} (demo placeholder)",
         "base_kv": 13.8,
         "num_customers": 3000,
         "peak_mw": 10.0,
@@ -131,7 +131,7 @@ def run_power_flow_scenario(
         notes = "Scenario appears within normal operating limits in this simplified model."
 
     return PowerFlowResult(
-        feeder=feeder.upper().strip(),
+        feeder=(feeder or "").upper().strip() or "F?",
         peak_loading_pct=peak_loading_pct,
         min_voltage_pu=min_voltage,
         max_voltage_pu=max_voltage,

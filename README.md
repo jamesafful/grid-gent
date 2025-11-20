@@ -1,8 +1,12 @@
-# Grid-Gent Demo
+# Grid-Gent Demo (v3)
 
-Minimal agentic-style assistant for city distribution grid scenarios.
+Agentic-style assistant for city distribution grid scenarios with:
 
-See code comments for details. Run with:
+- Unknown/smalltalk handling (no fake scenarios for 'hi', 'why', etc.).
+- Conceptual explanation mode when no feeder/MW is given.
+- Scenario mode (simulation / hosting_capacity) for actual what-if questions.
+
+Run:
 
 ```bash
 python main.py

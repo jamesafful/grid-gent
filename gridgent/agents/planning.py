@@ -7,17 +7,64 @@ from gridgent.tools.grid_stub import run_power_flow_scenario, get_feeder_summary
 
 class PlanningAgent:
     def plan_and_analyze(self, query: str, intent_info: Dict[str, Any]) -> Tuple[str, Dict[str, Any], List[Step]]:
-        feeder = intent_info["feeder"]
+        intent = intent_info["intent"]
+        steps: List[Step] = []
+
+        if intent == "unknown":
+            msg = (
+                "Received an underspecified or conversational query; no grid scenario was run. "
+                "Please mention at least a feeder (F1/F2/F3) and a change in MW load or PV."
+            )
+            steps.append(
+                Step(
+                    role="planning_agent",
+                    content=msg,
+                    meta={"intent": intent},
+                )
+            )
+            technical_summary: Dict[str, Any] = {
+                "intent": intent,
+                "message": msg,
+            }
+            return "no_scenario", technical_summary, steps
+
+        has_mw = bool(intent_info.get("has_mw"))
+        has_feeder = bool(intent_info.get("has_feeder"))
+
+        if intent == "explanation" and not has_mw and not has_feeder:
+            steps.append(
+                Step(
+                    role="planning_agent",
+                    content="No specific feeder or MW change detected; treating as conceptual explanation request.",
+                    meta={"intent": intent},
+                )
+            )
+            technical_summary = {
+                "intent": intent,
+                "topic_hint": query.strip(),
+            }
+            return "conceptual", technical_summary, steps
+
+        feeder = intent_info.get("feeder")
+        defaulted_feeder = False
+        if not feeder:
+            feeder = "F1"
+            defaulted_feeder = True
+
         added_pv = float(intent_info.get("added_pv_mw", 0.0))
         added_load = float(intent_info.get("added_load_mw", 0.0))
-
-        steps: List[Step] = []
 
         summary = (
             f"Analyzing feeder {feeder} with added PV={added_pv:.1f} MW, "
             f"added load={added_load:.1f} MW using a simplified power-flow stub."
         )
-        steps.append(Step(role="planning_agent", content=summary, meta={"feeder": feeder}))
+        steps.append(
+            Step(
+                role="planning_agent",
+                content=summary,
+                meta={"feeder": feeder, "defaulted_feeder": defaulted_feeder},
+            )
+        )
 
         pf_result = run_power_flow_scenario(feeder, added_pv_mw=added_pv, added_load_mw=added_load)
         pf_dict = pf_result.to_dict()
@@ -39,7 +86,7 @@ class PlanningAgent:
         )
 
         technical_summary: Dict[str, Any] = {
-            "intent": intent_info["intent"],
+            "intent": intent,
             "feeder": feeder,
             "added_pv_mw": added_pv,
             "added_load_mw": added_load,

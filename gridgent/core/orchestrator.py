@@ -23,8 +23,8 @@ class GridGentOrchestrator:
             Step(
                 role="intent_agent",
                 content=(
-                    f"Classified intent as '{intent_info['intent']}' and selected feeder "
-                    f"{intent_info['feeder']}."
+                    f"Classified intent as '{intent_info['intent']}'"
+                    + (f" and selected feeder {intent_info['feeder']}." if intent_info.get("feeder") else ".")
                 ),
                 meta=intent_info,
             )
@@ -38,7 +38,7 @@ class GridGentOrchestrator:
             Step(
                 role="narrator_agent",
                 content="Generated human-readable explanation for planner/operator.",
-                meta={},
+                meta={"status": status},
             )
         )
 

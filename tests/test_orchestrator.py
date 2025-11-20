@@ -15,6 +15,10 @@ class TestOrchestrator(unittest.TestCase):
         self.assertIn("planning_agent", roles)
         self.assertIn("narrator_agent", roles)
 
+    def test_run_unknown_query(self):
+        result = self.orch.run("hi")
+        self.assertIn("didn't see enough detail", result.answer.lower())
+
 
 if __name__ == "__main__":
     unittest.main()

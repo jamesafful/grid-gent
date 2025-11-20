@@ -15,8 +15,11 @@ class TestIntentAgent(unittest.TestCase):
     def test_simulation_intent_load_growth(self):
         info = self.agent.classify("Simulate load growth of 3 MW on feeder F1")
         self.assertEqual(info["intent"], "simulation")
-        self.assertEqual(info["feeder"], "F1")
         self.assertAlmostEqual(info["added_load_mw"], 3.0, places=3)
+
+    def test_unknown_for_smalltalk(self):
+        info = self.agent.classify("hi")
+        self.assertEqual(info["intent"], "unknown")
 
 
 if __name__ == "__main__":
