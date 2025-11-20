@@ -10,6 +10,9 @@ Agentic-style assistant for city distribution grid scenarios with:
 
 ![Grid-Gent UI](app/web/Grid-Gent-1.png)
 
+👉 **Live demo on Hugging Face Spaces:**  
+https://huggingface.co/spaces/jamesafful/grid-gent
+
 
 ## Running
 
