@@ -6,6 +6,7 @@ from urllib.parse import urlparse
 from typing import Tuple
 
 from gridgent.core.orchestrator import GridGentOrchestrator
+from gridgent.tools.grid_stub import parse_uploaded_grid, save_uploaded_grid, get_all_feeders
 
 
 ORCHESTRATOR = GridGentOrchestrator()
@@ -43,6 +44,10 @@ class GridGentHandler(BaseHTTPRequestHandler):
             except FileNotFoundError:
                 self._set_common_headers(500, "text/plain; charset=utf-8")
                 self.wfile.write(b"index.html not found")
+        elif parsed.path == "/api/feeders":
+            data = get_all_feeders()
+            self._set_common_headers(200, "application/json; charset=utf-8")
+            self.wfile.write(json.dumps({"feeders": data}).encode("utf-8"))
         else:
             self._set_common_headers(404, "text/plain; charset=utf-8")
             self.wfile.write(b"Not Found")
@@ -75,6 +80,27 @@ class GridGentHandler(BaseHTTPRequestHandler):
             resp = result.to_dict()
             self._set_common_headers(200, "application/json; charset=utf-8")
             self.wfile.write(json.dumps(resp).encode("utf-8"))
+        elif parsed.path == "/api/upload-grid":
+            ok, data = self._read_json()
+            if not ok:
+                self._set_common_headers(400, "application/json; charset=utf-8")
+                self.wfile.write(json.dumps(data).encode("utf-8"))
+                return
+            raw = data.get("raw")
+            fmt = data.get("format")
+            if not raw or not fmt:
+                self._set_common_headers(400, "application/json; charset=utf-8")
+                self.wfile.write(json.dumps({"error": "Missing 'raw' or 'format' in request body"}).encode("utf-8"))
+                return
+            try:
+                cfg = parse_uploaded_grid(str(raw), str(fmt))
+                save_uploaded_grid(cfg)
+                feeders = list(cfg.get("feeders", {}).keys())
+                self._set_common_headers(200, "application/json; charset=utf-8")
+                self.wfile.write(json.dumps({"status": "ok", "feeders_loaded": feeders}).encode("utf-8"))
+            except Exception as exc:
+                self._set_common_headers(400, "application/json; charset=utf-8")
+                self.wfile.write(json.dumps({"error": str(exc)}).encode("utf-8"))
         else:
             self._set_common_headers(404, "application/json; charset=utf-8")
             self.wfile.write(json.dumps({"error": "Not Found"}).encode("utf-8"))

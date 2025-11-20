@@ -3,18 +3,15 @@ from dataclasses import dataclass
 from typing import Dict, Any, List
 from pathlib import Path
 import json
+import csv
+import io
 
 _CONFIG_CACHE: Dict[str, Any] | None = None
+_BASE_DIR = Path(__file__).resolve().parents[2]
 
 
-def _load_feeder_config() -> Dict[str, Any]:
-    global _CONFIG_CACHE
-    if _CONFIG_CACHE is not None:
-        return _CONFIG_CACHE
-
-    base_dir = Path(__file__).resolve().parents[2]
-    cfg_path = base_dir / "config" / "feeders.json"
-    default = {
+def _default_feeder_config() -> Dict[str, Any]:
+    return {
         "feeders": {
             "F1": {
                 "name": "Feeder F1 - Downtown Core",
@@ -40,21 +37,43 @@ def _load_feeder_config() -> Dict[str, Any]:
         }
     }
 
-    if not cfg_path.exists():
-        _CONFIG_CACHE = default
+
+def _load_feeder_config() -> Dict[str, Any]:
+    """Load feeder configuration with upload override."""
+    global _CONFIG_CACHE
+    if _CONFIG_CACHE is not None:
         return _CONFIG_CACHE
 
-    try:
-        with cfg_path.open("r", encoding="utf-8") as f:
-            data = json.load(f)
-            if not isinstance(data, dict) or "feeders" not in data:
-                _CONFIG_CACHE = default
-            else:
-                _CONFIG_CACHE = data
-    except Exception:
-        _CONFIG_CACHE = default
+    uploaded_path = _BASE_DIR / "config" / "uploaded_feedermodel.json"
+    base_path = _BASE_DIR / "config" / "feeders.json"
 
+    if uploaded_path.exists():
+        try:
+            with uploaded_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and "feeders" in data:
+                _CONFIG_CACHE = data
+                return _CONFIG_CACHE
+        except Exception:
+            pass
+
+    if base_path.exists():
+        try:
+            with base_path.open("r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, dict) and "feeders" in data:
+                _CONFIG_CACHE = data
+                return _CONFIG_CACHE
+        except Exception:
+            pass
+
+    _CONFIG_CACHE = _default_feeder_config()
     return _CONFIG_CACHE
+
+
+def reload_feeder_config() -> None:
+    global _CONFIG_CACHE
+    _CONFIG_CACHE = None
 
 
 def get_feeder_summary(feeder: str) -> Dict[str, Any]:
@@ -63,7 +82,6 @@ def get_feeder_summary(feeder: str) -> Dict[str, Any]:
     feeders = cfg.get("feeders", {})
     if feeder_key and feeder_key in feeders:
         return feeders[feeder_key]
-
     return {
         "name": f"Feeder {feeder_key or 'F?'} (demo placeholder)",
         "base_kv": 13.8,
@@ -71,6 +89,15 @@ def get_feeder_summary(feeder: str) -> Dict[str, Any]:
         "peak_mw": 10.0,
         "pv_mw": 1.0,
     }
+
+
+def get_all_feeders() -> Dict[str, Dict[str, Any]]:
+    cfg = _load_feeder_config()
+    feeders = cfg.get("feeders", {})
+    out: Dict[str, Dict[str, Any]] = {}
+    for k, v in feeders.items():
+        out[str(k).upper()] = v
+    return out
 
 
 @dataclass
@@ -138,3 +165,87 @@ def run_power_flow_scenario(
         overload_elements=overload_elements,
         notes=notes,
     )
+
+
+def parse_uploaded_grid(raw: str, fmt: str) -> Dict[str, Any]:
+    fmt = (fmt or "").lower().strip()
+    if fmt not in {"json", "csv"}:
+        raise ValueError("Unsupported format; expected 'json' or 'csv'.")
+
+    if fmt == "json":
+        try:
+            data = json.loads(raw)
+        except Exception as exc:
+            raise ValueError(f"Invalid JSON: {exc}") from exc
+
+        if isinstance(data, dict) and "feeders" in data and isinstance(data["feeders"], dict):
+            feeders_in = data["feeders"]
+        elif isinstance(data, list):
+            feeders_in = {}
+            for row in data:
+                if not isinstance(row, dict):
+                    raise ValueError("JSON list must contain objects with feeder fields.")
+                fid = row.get("feeder_id") or row.get("id") or row.get("name")
+                if not fid:
+                    raise ValueError("Each feeder row must contain a 'feeder_id' or 'id' or 'name'.")
+                feeders_in[str(fid).upper()] = {
+                    "name": row.get("name", str(fid)),
+                    "base_kv": float(row.get("base_kv", 13.8)),
+                    "num_customers": int(row.get("num_customers", 1000)),
+                    "peak_mw": float(row.get("peak_mw", 10.0)),
+                    "pv_mw": float(row.get("pv_mw", 1.0)),
+                }
+        else:
+            raise ValueError("JSON must be an object with 'feeders' or a list of feeders.")
+
+        feeders_out: Dict[str, Any] = {}
+        for k, v in feeders_in.items():
+            fid = str(k).upper()
+            if not isinstance(v, dict):
+                raise ValueError("Each feeder entry must be an object.")
+            feeders_out[fid] = {
+                "name": v.get("name", fid),
+                "base_kv": float(v.get("base_kv", 13.8)),
+                "num_customers": int(v.get("num_customers", 1000)),
+                "peak_mw": float(v.get("peak_mw", 10.0)),
+                "pv_mw": float(v.get("pv_mw", 1.0)),
+            }
+        if not feeders_out:
+            raise ValueError("No feeders found in uploaded JSON.")
+        return {"feeders": feeders_out}
+
+    # CSV
+    f = io.StringIO(raw)
+    reader = csv.DictReader(f)
+    required = ["feeder_id", "name", "base_kv", "num_customers", "peak_mw", "pv_mw"]
+    if reader.fieldnames is None:
+        raise ValueError("CSV appears to have no header.")
+    for r in required:
+        if r not in reader.fieldnames:
+            raise ValueError(f"CSV missing required column '{r}'")
+
+    feeders_out: Dict[str, Any] = {}
+    for row in reader:
+        fid = row.get("feeder_id")
+        if not fid:
+            raise ValueError("CSV row missing feeder_id.")
+        fid_u = str(fid).upper()
+        feeders_out[fid_u] = {
+            "name": row.get("name") or fid_u,
+            "base_kv": float(row.get("base_kv") or 13.8),
+            "num_customers": int(row.get("num_customers") or 1000),
+            "peak_mw": float(row.get("peak_mw") or 10.0),
+            "pv_mw": float(row.get("pv_mw") or 1.0),
+        }
+
+    if not feeders_out:
+        raise ValueError("No feeders found in uploaded CSV.")
+    return {"feeders": feeders_out}
+
+
+def save_uploaded_grid(config: Dict[str, Any]) -> None:
+    if not isinstance(config, dict) or "feeders" not in config:
+        raise ValueError("Uploaded config must be a dict with 'feeders'.")
+    path = _BASE_DIR / "config" / "uploaded_feedermodel.json"
+    path.write_text(json.dumps(config, indent=2), encoding="utf-8")
+    reload_feeder_config()

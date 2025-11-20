@@ -33,6 +33,25 @@ class TestHTTPAPI(unittest.TestCase):
             self.assertIn("steps", data)
             self.assertIsInstance(data["steps"], list)
 
+    def test_api_upload_grid(self):
+        payload = {
+            "raw": "feeder_id,name,base_kv,num_customers,peak_mw,pv_mw\n"
+                   "U1,Feeder U1,13.8,100,7.0,1.0\n",
+            "format": "csv",
+        }
+        body = json.dumps(payload).encode("utf-8")
+        req = urllib.request.Request(
+            "http://127.0.0.1:8765/api/upload-grid",
+            data=body,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            self.assertEqual(resp.status, 200)
+            data = json.loads(resp.read().decode("utf-8"))
+            self.assertEqual(data["status"], "ok")
+            self.assertIn("U1", data["feeders_loaded"])
+
 
 if __name__ == "__main__":
     unittest.main()

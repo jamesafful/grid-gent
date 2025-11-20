@@ -1,0 +1,11 @@
+{
+  "feeders": {
+    "Q1": {
+      "name": "Feeder Q1",
+      "base_kv": 13.8,
+      "num_customers": 100,
+      "peak_mw": 5.0,
+      "pv_mw": 0.5
+    }
+  }
+}

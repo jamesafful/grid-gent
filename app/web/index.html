@@ -11,7 +11,7 @@
             color: #e5e7eb;
         }
         body { margin: 0; padding: 0; }
-        .page { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+        .page { max-width: 1040px; margin: 0 auto; padding: 24px 16px 48px; }
         .card {
             background: #020617;
             border-radius: 16px;
@@ -119,6 +119,49 @@
             border-radius: 6px;
             font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
         }
+        .layout {
+            display: grid;
+            grid-template-columns: minmax(0, 2.2fr) minmax(0, 1.2fr);
+            gap: 18px;
+            margin-top: 18px;
+        }
+        @media (max-width: 900px) {
+            .layout { grid-template-columns: minmax(0, 1fr); }
+        }
+        .panel {
+            border-radius: 12px;
+            border: 1px solid rgba(148,163,184,0.25);
+            padding: 12px 12px 14px;
+            background: rgba(15,23,42,0.8);
+        }
+        .panel-title {
+            font-size: 0.9rem;
+            font-weight: 600;
+            margin-bottom: 6px;
+        }
+        .panel-sub {
+            font-size: 0.75rem;
+            color: #9ca3af;
+            margin-bottom: 6px;
+        }
+        input[type="file"] {
+            font-size: 0.8rem;
+        }
+        .status {
+            margin-top: 6px;
+            font-size: 0.75rem;
+            color: #9ca3af;
+            white-space: pre-wrap;
+        }
+        .feeders-list {
+            margin-top: 4px;
+            font-size: 0.78rem;
+        }
+        .feeders-list code {
+            background: rgba(15,23,42,0.8);
+            padding: 1px 5px;
+            border-radius: 6px;
+        }
     </style>
 </head>
 <body>
@@ -132,30 +175,82 @@
                 <div class="pill">Offline demo · no real grid connection</div>
             </div>
 
-            <div style="margin-top:18px;">
-                <label for="query">Describe a grid scenario or question:</label>
-                <textarea id="query" placeholder="Example: What happens on feeder F2 if we add 5 MW of rooftop PV?"></textarea>
-                <button id="ask-btn" onclick="sendQuery()">
-                    <span id="btn-label">Run Grid-Gent</span>
-                    <span id="btn-spinner" style="display:none;">⏳</span>
-                </button>
-            </div>
+            <div class="layout">
+                <div>
+                    <div>
+                        <label for="query">Describe a grid scenario or question:</label>
+                        <textarea id="query" placeholder="Example: What happens on feeder F2 if we add 5 MW of rooftop PV?"></textarea>
+                        <button id="ask-btn" onclick="sendQuery()">
+                            <span id="btn-label">Run Grid-Gent</span>
+                            <span id="btn-spinner" style="display:none;">⏳</span>
+                        </button>
+                    </div>
 
-            <div class="examples">
-                Try things like:
-                <div><code>What happens on feeder F2 if we add 5 MW of rooftop PV?</code></div>
-                <div><code>Simulate adding 3 MW of load on feeder F1.</code></div>
-            </div>
+                    <div class="examples">
+                        Try things like:
+                        <div><code>What happens on feeder F2 if we add 5 MW of rooftop PV?</code></div>
+                        <div><code>Simulate adding 3 MW of load on feeder F1.</code></div>
+                    </div>
 
-            <div id="answer" class="answer" style="display:none;">
-                <div class="answer-badge">Demo only · not using your real grid data · not for operational decisions</div>
-                <div id="answer-text"></div>
+                    <div id="answer" class="answer" style="display:none;">
+                        <div class="answer-badge">Demo only · not using your real grid data unless you upload a model · not for operational decisions</div>
+                        <div id="answer-text"></div>
+                    </div>
+                    <div id="steps" class="steps" style="display:none;"></div>
+                </div>
+
+                <div>
+                    <div class="panel">
+                        <div class="panel-title">Upload grid model (JSON or CSV)</div>
+                        <div class="panel-sub">
+                            We will replace the demo feeders with your uploaded ones (still using a simplified calculation).
+                        </div>
+                        <input type="file" id="grid-file" accept=".json,.csv" />
+                        <button id="upload-btn" style="margin-top:8px;" onclick="uploadGrid()">
+                            <span id="upload-label">Upload model</span>
+                            <span id="upload-spinner" style="display:none;">⏳</span>
+                        </button>
+                        <div id="upload-status" class="status"></div>
+                    </div>
+
+                    <div class="panel" style="margin-top:10px;">
+                        <div class="panel-title">Currently loaded feeders</div>
+                        <div class="panel-sub">Based on demo data or your last upload.</div>
+                        <div id="feeders" class="feeders-list">Loading...</div>
+                    </div>
+                </div>
             </div>
-            <div id="steps" class="steps" style="display:none;"></div>
         </div>
     </div>
 
     <script>
+        async function refreshFeeders() {
+            const el = document.getElementById("feeders");
+            try {
+                const resp = await fetch("/api/feeders");
+                if (!resp.ok) {
+                    el.textContent = "Error loading feeders.";
+                    return;
+                }
+                const data = await resp.json();
+                const feeders = data.feeders || {};
+                const ids = Object.keys(feeders);
+                if (!ids.length) {
+                    el.textContent = "No feeders configured.";
+                    return;
+                }
+                const parts = ids.map(id => {
+                    const f = feeders[id];
+                    const name = f.name || id;
+                    const peak = f.peak_mw;
+                    return id + " – " + name + " (" + peak + " MW peak)";
+                });
+                el.innerHTML = parts.map(p => "<div><code>" + p + "</code></div>").join("");
+            } catch (e) {
+                el.textContent = "Error loading feeders: " + e;
+            }
+        }
+
         async function sendQuery() {
             const textarea = document.getElementById("query");
             const btn = document.getElementById("ask-btn");
@@ -227,6 +322,68 @@
                 label.textContent = "Run Grid-Gent";
             }
         }
+
+        async function uploadGrid() {
+            const input = document.getElementById("grid-file");
+            const status = document.getElementById("upload-status");
+            const btn = document.getElementById("upload-btn");
+            const label = document.getElementById("upload-label");
+            const spinner = document.getElementById("upload-spinner");
+
+            const file = input.files[0];
+            if (!file) {
+                alert("Please choose a JSON or CSV file first.");
+                return;
+            }
+
+            let fmt = "json";
+            if (file.name.toLowerCase().endsWith(".csv")) {
+                fmt = "csv";
+            } else if (file.name.toLowerCase().endsWith(".json")) {
+                fmt = "json";
+            } else {
+                alert("File extension must be .json or .csv");
+                return;
+            }
+
+            btn.disabled = true;
+            spinner.style.display = "inline-block";
+            label.textContent = "Uploading...";
+
+            const reader = new FileReader();
+            reader.onload = async () => {
+                const raw = reader.result;
+                try {
+                    const resp = await fetch("/api/upload-grid", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ raw, format: fmt })
+                    });
+                    const data = await resp.json();
+                    if (!resp.ok) {
+                        status.textContent = "Upload failed: " + (data.error || resp.statusText);
+                    } else {
+                        status.textContent = "Upload succeeded. Feeders loaded: " + (data.feeders_loaded || []).join(", ");
+                        refreshFeeders();
+                    }
+                } catch (e) {
+                    status.textContent = "Upload failed: " + e;
+                } finally {
+                    btn.disabled = false;
+                    spinner.style.display = "none";
+                    label.textContent = "Upload model";
+                }
+            };
+            reader.onerror = () => {
+                status.textContent = "Could not read file.";
+                btn.disabled = false;
+                spinner.style.display = "none";
+                label.textContent = "Upload model";
+            };
+            reader.readAsText(file);
+        }
+
+        refreshFeeders();
     </script>
 </body>
 </html>
